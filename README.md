@@ -58,6 +58,28 @@ bash ./tools/train_femtodet.sh 4
 |            |        |   46.5   | ./configs/femtoDet/femtodet_3stage.py  |
 ---------------------------------------------------------------------------
 ```
+### Deployment
+- Support convert model to onnx.
+- You can convert onnx using the following command, but there are many useless ops that affect performance.
+```
+python tools/deployment/pytorch2onnx.py femtodet_3stage.py ./best_bbox_mAP_epoch_300.pth --simplify --skip-postprocess --output-file work_dirs/femtodet_0stage/out.onnx
+```
+- We support a reparameterized way to transform the model(recommend).
+1. Convert stage 3 model use 
+```
+python tools/deployment/femtodet_deploy_reparam.py ./best_bbox_mAP_epoch_300.pth work_dirs/femtodet_0stage/rep.pth.
+```
+2. This model will have same precision with before.You can use the following command to compare.
+```
+python tools/test.py femtodet_3stage.py ./best_bbox_mAP_epoch_300.pth --eval bbox
+python tools/test.py femtodet_deploy.py ./rep.pth --eval bbox
+```
+3. Convert reparameterized model to onnx.
+```
+python tools/deployment/pytorch2onnx.py ./femtodet_deploy.py ./rep.pth --simplify --skip-postprocess --output-file work_dirs/out_rep.onnx
+```
+On the left is the model structure before reparameterization, and on the right is the model structure after reparameterization.If you want to deploy to the device, you need to write your own post-processing code.
+![compare](demo/compare.png)
 
 ### References
 If you find the code useful for your research, please consider citing:

@@ -46,7 +46,9 @@ class InvertedResidual(BaseModule):
                  norm_cfg=dict(type='BN'),
                  act_cfg=dict(type='ReLU6'),
                  with_cp=False,
-                 init_cfg=None):
+                 init_cfg=None,
+                 deploy=False,
+                 diff_conv=False):
         super(InvertedResidual, self).__init__(init_cfg)
         self.stride = stride
         assert stride in [1, 2], f'stride must in [1, 2]. ' \
@@ -65,27 +67,49 @@ class InvertedResidual(BaseModule):
                     conv_cfg=conv_cfg,
                     norm_cfg=norm_cfg,
                     act_cfg=act_cfg))
-
-        layers.extend([
-            conv(
-                in_channels=hidden_dim,
-                out_channels=hidden_dim,
-                kernel_size=3,
-                stride=stride,
-                padding=1,
-                groups=hidden_dim,
-                conv_cfg=conv_cfg,
-                norm_cfg=norm_cfg,
-                act_cfg=act_cfg),
-            ConvModule(
-                in_channels=hidden_dim,
-                out_channels=out_channels,
-                kernel_size=1,
-                groups=groups,
-                conv_cfg=conv_cfg,
-                norm_cfg=norm_cfg,
-                act_cfg=None)
-            ])
+        if diff_conv == False:
+            layers.extend([
+                conv(
+                    in_channels=hidden_dim,
+                    out_channels=hidden_dim,
+                    kernel_size=3,
+                    stride=stride,
+                    padding=1,
+                    groups=hidden_dim,
+                    conv_cfg=conv_cfg,
+                    norm_cfg=norm_cfg,
+                    act_cfg=act_cfg),
+                ConvModule(
+                    in_channels=hidden_dim,
+                    out_channels=out_channels,
+                    kernel_size=1,
+                    groups=groups,
+                    conv_cfg=conv_cfg,
+                    norm_cfg=norm_cfg,
+                    act_cfg=None)
+                ])
+        else:
+            layers.extend([
+                conv(
+                    in_channels=hidden_dim,
+                    out_channels=hidden_dim,
+                    kernel_size=3,
+                    stride=stride,
+                    padding=1,
+                    groups=hidden_dim,
+                    conv_cfg=conv_cfg,
+                    norm_cfg=norm_cfg,
+                    act_cfg=act_cfg,
+                    deploy=deploy),
+                ConvModule(
+                    in_channels=hidden_dim,
+                    out_channels=out_channels,
+                    kernel_size=1,
+                    groups=groups,
+                    conv_cfg=conv_cfg,
+                    norm_cfg=norm_cfg,
+                    act_cfg=None)
+                ])
         
         self.conv = nn.Sequential(*layers)
 
@@ -157,7 +181,8 @@ class FemtoNet(BaseModule):
                          type='Constant',
                          val=1,
                          layer=['_BatchNorm', 'GroupNorm'])
-                 ]):
+                 ],
+                 deploy = False):
         super(FemtoNet, self).__init__(init_cfg)
         
         self.pretrained = pretrained
@@ -195,6 +220,8 @@ class FemtoNet(BaseModule):
         self.act_cfg = act_cfg
         self.norm_eval = norm_eval
         self.with_cp = with_cp
+        self.deploy = deploy
+
 
         self.in_channels = make_divisible(32 * widen_factor, 8)
         self.conv1 = ConvModule(
@@ -218,12 +245,13 @@ class FemtoNet(BaseModule):
                 stride=stride,
                 expand_ratio=expand_ratio,
                 diff_conv=diff_conv,
-                groups=groups)
+                groups=groups,
+                deploy=self.deploy)
             layer_name = f'layer{i + 1}'
             self.add_module(layer_name, inverted_res_layer)
             self.layers.append(layer_name)
 
-    def make_layer(self, out_channels, num_blocks, stride, expand_ratio, diff_conv, groups=1):
+    def make_layer(self, out_channels, num_blocks, stride, expand_ratio, diff_conv, groups=1, deploy=False):
         """Stack InvertedResidual blocks to build a layer for MobileNetV2.
 
         Args:
@@ -253,7 +281,9 @@ class FemtoNet(BaseModule):
                     conv_cfg=self.conv_cfg,
                     norm_cfg=self.norm_cfg,
                     act_cfg=self.act_cfg,
-                    with_cp=self.with_cp))
+                    with_cp=self.with_cp,
+                    deploy=deploy,
+                    diff_conv=diff_conv))
             self.in_channels = out_channels
 
         return nn.Sequential(*layers)
@@ -289,3 +319,9 @@ class FemtoNet(BaseModule):
                 # trick: eval have effect on BatchNorm only
                 if isinstance(m, _BatchNorm):
                     m.eval()
+                    
+    def switch_to_deploy(self):
+        for m in self.modules():
+            if isinstance(m, IBEConvModule):
+                m.switch_to_deploy()
+        self.deploy = True
