@@ -1,6 +1,9 @@
 # dataset settings
 dataset_type = 'CocoDataset'
-data_root = 'data/coco/'
+classes = ('open', 'short', 'mousebite', 'spur', 'copper', 'pin-hole')
+work_dir = 'work_dirs_pcb/faster_rcnn_r50_1333_800'
+
+data_root = '/home/xiexu/code/pcb/DeepPCB-to-COCO-main/JSONdump/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [
@@ -33,17 +36,20 @@ data = dict(
     workers_per_gpu=2,
     train=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/instances_train2017.json',
-        img_prefix=data_root + 'train2017/',
+        classes=classes,
+        ann_file=data_root+'instances_train2014.json',
+        img_prefix=data_root+'images',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/instances_val2017.json',
-        img_prefix=data_root + 'val2017/',
+        classes=classes,
+        ann_file=data_root+'instances_test2014.json',
+        img_prefix=data_root+'images',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/instances_val2017.json',
-        img_prefix=data_root + 'val2017/',
+        classes=classes,
+        ann_file=data_root+'instances_test2014.json',
+        img_prefix=data_root+'images',
         pipeline=test_pipeline))
 evaluation = dict(interval=1, metric='bbox')
